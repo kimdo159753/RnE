@@ -1,0 +1,17 @@
+# 수집 데이터 (수백 MB, GitHub 한도 초과) — 클라우드에서는 collect_abandoned.py로 다시 받는다
+abandoned_dogs.csv
+abandoned_dogs.csv.jsonl
+abandoned_dogs.csv.progress
+
+# 계산 결과물: 임베딩 캐시, 모델, 예측, 로그
+emb_cache/
+results*/
+model_search/
+catboost_info/
+*.log
+*.cbm
+*.npz
+*.pkl
+
+__pycache__/
+.env
