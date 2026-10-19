@@ -10,7 +10,8 @@
 - `text_analysis.py`: 특징 텍스트 누수 점검, kiwi 형태소 단어별 로그 오즈, TF-IDF 추가 설명력.
 - `embed_marks.py`: 누수 제거된 특징 텍스트의 문장 임베딩 캐시(.npz) 생성.
 - `compare_text_repr.py`: 텍스트 표현(없음/TF-IDF/임베딩/둘 다) 비교 + 보호소 클러스터 부트스트랩(`boot_diff`).
-- `model_search.py`: 모델 계열 비교(로지스틱/LightGBM/XGBoost/CatBoost/MLP + 평균 앙상블). **아직 한 번도 실행 안 함.**
+- `model_search.py`: 모델 계열 비교(로지스틱/LightGBM/XGBoost/CatBoost/MLP + 평균 앙상블). 2026-10-19 1/20 표본·가짜 임베딩으로
+  처음부터 끝까지 도는 것 확인. 전체 실행은 로컬에서 진행(클라우드 VM은 4 vCPU라 이 PC 14스레드보다 느려서 로컬 유지).
 - `run_pipeline.sh`: 수집 → 임베딩 → 모델 비교를 처음부터 다시 돌리는 순서(클라우드용).
 - 데이터·임베딩·결과물은 .gitignore로 제외(수백 MB). 클라우드에서는 `run_pipeline.sh`로 다시 만든다.
   `text_results*/`, `text_repr_results/`의 요약 CSV만 커밋에 들어간다(이전 분석 근거).
@@ -97,7 +98,10 @@
 2. ~~2021~현재 전체 수집~~ (완료 2026-10-19, 433,422건 → `abandoned_dogs.csv`)
 3. ~~학습 실행, 처리상태 분류 목록 확인~~ (완료 2026-10-19, 위 결과)
 4. ~~특징 텍스트 임베딩~~ (완료 2026-10-19, 채택). 생존분석(입양까지 걸린 시간)은 남음.
-5. **(지금 할 일) 모델 계열 다시 고르기** — 사용자 요청: "꼭 CatBoost일 필요 없으니 지금 구조에 가장 적합한 모델을 찾아라".
+5. **(지금 할 일) 모델 계열 다시 고르기** — 2026-10-19 23시경 사용자 요청으로 중단. 다시 시작할 곳:
+   (1) 새 마스크 임베딩 `embed_marks.py ... --out emb_cache/e5_base_v2.npz` (중간 저장 없음, 처음부터 약 35분),
+   (2) `model_search.py --csv abandoned_dogs.csv --emb emb_cache/e5_base_v2.npz --out model_search` (예상 5~6시간,
+   계열별 pkl로 이어 하기 가능). 작은 표본 시험은 통과함. `run_pipeline.sh`의 2·3단계와 같다(로컬은 수집 건너뜀). — 사용자 요청: "꼭 CatBoost일 필요 없으니 지금 구조에 가장 적합한 모델을 찾아라".
    `run_pipeline.sh`가 수집 → 새 마스크 임베딩 → `model_search.py`를 순서대로 돌린다.
    - 먼저 `model_search.py`를 작은 표본으로 시험할 것: 가짜 임베딩 npz(새 마스크 mark 기준 고유 문장, 임의 차원)를 만들고
      `--stride 20 --n-cfg 2 --lr-pca 16`. 한 번도 실행하지 않은 코드라 오류 가능성 높음.
