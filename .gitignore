@@ -7,6 +7,7 @@ abandoned_dogs.csv.progress
 emb_cache/
 results*/
 model_search/
+final_model/pred_test_*.csv
 catboost_info/
 *.log
 *.cbm
