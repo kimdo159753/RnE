@@ -31,3 +31,4 @@ photos/
 photos_meta.csv
 docs/session_logs/
 cloud_bundle.zip
+cloud_bundle.zip.part*
