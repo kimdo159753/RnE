@@ -82,6 +82,7 @@ class Data:
             m = LogisticRegression(C=0.3, max_iter=3000, solver="liblinear").fit(self.T[self.i_tr[a]], self.y[self.i_tr[a]])
             txt[self.i_tr[b]] = m.predict_proba(self.T[self.i_tr[b]])[:, 1]
         m = LogisticRegression(C=0.3, max_iter=3000, solver="liblinear").fit(self.T[self.i_tr], self.y[self.i_tr])
+        self.txt_model = m  # 새 개체 예측 때 같은 텍스트 점수를 만들려고 남겨 둔다
         rest = np.concatenate([self.i_va, self.i_te])
         txt[rest] = m.predict_proba(self.T[rest])[:, 1]
         self.txt = txt.astype(np.float32)
@@ -134,7 +135,7 @@ def fit_xgboost(D, shelter, cfg):
     return m.predict_proba(X.iloc[D.i_va])[:, 1], m.predict_proba(X.iloc[D.i_te])[:, 1], {"iters": m.best_iteration}
 
 
-def fit_catboost(D, shelter, cfg):
+def fit_catboost(D, shelter, cfg, return_model=False):
     from catboost import CatBoostClassifier, Pool
     cat = D.cats(shelter)
     X = D.tree_frame(shelter)
@@ -149,7 +150,8 @@ def fit_catboost(D, shelter, cfg):
     m = CatBoostClassifier(iterations=5000, learning_rate=0.06, loss_function="Logloss", eval_metric="Logloss",
                            od_type="Iter", od_wait=100, random_seed=42, verbose=0, thread_count=-1, **cfg)
     m.fit(pool(D.i_tr), eval_set=pool(D.i_va), use_best_model=True)
-    return m.predict_proba(pool(D.i_va))[:, 1], m.predict_proba(pool(D.i_te))[:, 1], {"iters": m.get_best_iteration()}
+    out = (m.predict_proba(pool(D.i_va))[:, 1], m.predict_proba(pool(D.i_te))[:, 1], {"iters": m.get_best_iteration()})
+    return out + (m,) if return_model else out
 
 
 def fit_mlp(D, shelter, cfg):
