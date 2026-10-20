@@ -22,3 +22,7 @@ memo_check/*
 !memo_check/gold_eval_sample.txt
 !memo_check/eval_sample.csv
 !memo_check/memo_effects*.csv
+
+# 보고서 산출물(재생성 가능)과 학교 양식
+report_fig/
+*.hwpx
