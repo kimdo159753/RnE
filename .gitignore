@@ -16,3 +16,9 @@ catboost_info/
 
 __pycache__/
 .env
+abandoned_dogs_sample_*.csv
+!memo_check/
+memo_check/*
+!memo_check/gold_eval_sample.txt
+!memo_check/eval_sample.csv
+!memo_check/memo_effects*.csv
