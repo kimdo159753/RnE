@@ -27,10 +27,11 @@ memo_check/*
 report_fig/
 *.hwpx
 
-photos/
-photos_meta.csv
+photos*/
+photos*_meta.csv
 docs/session_logs/
 cloud_bundle.zip
 cloud_bundle.zip.part*
 train_artifacts.zip
 photos_sample*.zip
+*.err
