@@ -219,6 +219,12 @@
       2026-10-21 16:35 기준 86,650장, 404 0.3%, 네트워크 오류(status 0) 37건, 개 인식 98.6%. 디스크 약 3.2GB 예상.
       2026-10-22 01:05 117,702장에서 멈춤(Claude 앱/세션 재시작으로 백그라운드 작업이 같이 꺼진 것으로 보임, 오류 메시지 없음).
       07:35 앱과 분리된 프로세스로 재시작(PowerShell Start-Process, 로그 `fetch_photos_all_2.log`/`.err`) — 이어 받기 정상.
+      **2026-10-22 16:47 다른 PC로 옮기려고 중단: 146,170마리 기록(64.7%), 자른 사진 143,775장.**
+      옮길 묶음(원래 PC `transfer/`, gitignore): `photos_resume.zip`(photos_all_meta.csv, 11MB),
+      `photos_crop_2022~2025.zip`(photos_all/crop/*.jpg, 연도별 400~504MB, 합계 1.9GB) → GitHub 릴리스 `data-v1`에 올릴 예정.
+      다른 PC에서 이어 받기: 릴리스에서 `cloud_bundle.zip`(abandoned_dogs.csv 포함, 이미 있음) + 위 zip 5개를 받아 저장소 폴더에서 풀고
+      `pip install -r requirements.txt pillow torchvision==0.24.0` 후 위 명령(--out photos_all --meta photos_all_meta.csv)을 그대로 실행.
+      API 인증키는 필요 없음(사진 주소는 abandoned_dogs.csv에 있음). 두 PC에서 동시에 돌리지 말 것(중복·기록 어긋남).
     - **다운로드 끝나면 할 일(사용자와 합의):**
       (1) 실패 정리: status 0(네트워크 오류)만 다시 받기 — 지금 스크립트는 meta에 있는 개체를 건너뛰므로 재시도 옵션이 필요.
           404는 서버에 파일 없음. 실패 개체의 입양률이 다른지 확인.
