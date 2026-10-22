@@ -35,3 +35,4 @@ cloud_bundle.zip.part*
 train_artifacts.zip
 photos_sample*.zip
 *.err
+transfer/
