@@ -15,7 +15,7 @@
   4 decide      처리 고르기 규칙(아래) → photo_pipeline/decision.json
   5 clean_all   고른 처리를 전체 사진에 적용(고른 게 없으면 건너뜀).
   6 embed       자른 사진 그대로 3개 모델 + (고른 처리가 있으면) 처리한 사진 3개 모델.
-  7 compare     compare_photo.py --group-cv (채택 판정, 보호소 단위 교차검증).
+  7 compare     compare_photo.py (채택 판정). 보호소 단위 교차검증(--group-cv)은 사용자 결정으로 뺌.
   끝나면 photo_pipeline/SUMMARY.txt에 결정과 판정 줄을 모은다.
 
 처리 고르기 규칙 (CLAUDE.md 계획 2·3을 숫자로 옮긴 것)
@@ -164,7 +164,8 @@ def main():
         if chosen:
             photos += [f"{m}_{chosen}=emb_cache/photo_{m}_{chosen}.npz" for m in MODELS]
         run("compare", ["-u", "compare_photo.py", "--csv", "abandoned_dogs.csv", "--emb", "emb_cache/e5_base_v2.npz",
-                        "--search", "model_search", "--photo", *photos, "--out", "photo_compare", "--group-cv"])
+                        "--search", "model_search", "--photo", *photos, "--out", "photo_compare"])
+        # --group-cv(처음 보는 보호소 검증)는 사용자 결정으로 하지 않음(2026-10-23)
         mark("compare")
 
     with open(os.path.join(W, "compare.log"), encoding="utf-8", errors="replace") as f:
