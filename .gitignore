@@ -36,3 +36,11 @@ train_artifacts.zip
 photos_sample*.zip
 *.err
 transfer/
+# 사진 처리 시험·자동 실행(사진·임베딩·로그). 요약 CSV만 커밋
+!photo_clean/
+photo_clean/*
+!photo_clean/clean_check.csv
+photo_clean_all/
+photo_pipeline/
+photo_compare/*
+!photo_compare/*.csv

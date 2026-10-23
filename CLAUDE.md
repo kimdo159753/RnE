@@ -225,6 +225,9 @@
       다른 PC에서 이어 받기: 릴리스에서 `cloud_bundle.zip`(abandoned_dogs.csv 포함, 이미 있음) + 위 zip 5개를 받아 저장소 폴더에서 풀고
       `pip install -r requirements.txt pillow torchvision==0.24.0` 후 위 명령(--out photos_all --meta photos_all_meta.csv)을 그대로 실행.
       API 인증키는 필요 없음(사진 주소는 abandoned_dogs.csv에 있음). 두 PC에서 동시에 돌리지 말 것(중복·기록 어긋남).
+      **2026-10-22 새 PC(Guest_user, 저장소 `Desktop\송유준_R&E`)에서 이어 받기 시작**: 릴리스 zip 6개 받아 풂(meta 146,170, 사진 143,775 일치).
+      파이썬은 `C:\Users\Guest_user\miniconda3\python.exe`(base, torch 2.7.1·torchvision 0.22.1 — 요구 버전과 다르지만 같은 검출 가중치).
+      Start-Process로 분리 실행, 로그 `fetch_photos_all_3.log`/`.err`. 남은 79,675마리, 0.35초/장(약 8시간). 받은 zip은 `_download/`(.git/info/exclude).
     - **다운로드 끝나면 할 일(사용자와 합의):**
       (1) 실패 정리: status 0(네트워크 오류)만 다시 받기 — 지금 스크립트는 meta에 있는 개체를 건너뛰므로 재시도 옵션이 필요.
           404는 서버에 파일 없음. 실패 개체의 입양률이 다른지 확인.
@@ -249,7 +252,34 @@
          느낌), ConvNeXt-Tiny 또는 EfficientNet-B0(CNN, 비교 기준). → PCA 32 → CatBoost에 추가.
       5. 판정: 기존 규칙(검증으로만 선택, 보호소 클러스터 부트스트랩 하한 > 0, 시험 ΔPR > 0). 보호소 포함 모델과
          보호소 단위 교차검증에서도 오르는지 반드시 확인(사진이 보호소 대신 개 외형을 알려 주는지 보는 마지막 관문).
-      나중 선택지: 파인튜닝(GPU 필요 → Google Colab), PetFinder Pawpularity(약 1만 장)로 귀여움 점수 모델을 만들어 우리 사진에 점수.
+      **새 PC(Guest_user)는 NVIDIA RTX 3060 12GB가 있고 miniconda torch가 CUDA 판(2.7.1+cu118, cuda 사용 가능 확인)** →
+      이 PC에서는 2(c)·4의 시간이 크게 줄고 파인튜닝도 로컬에서 가능. 위 시간 추정은 원래 PC(CPU) 기준.
+      **2026-10-22 21:40 자동 실행 시작(사용자 요청: "놔둬도 꺼지지 않고 계속 이어지게")**: `run_photo_pipeline.py`가 앱과 분리된
+      프로세스로 받기 끝 → 실패 재시도 → 2,000장 시험(`photo_clean_check.py`) → 처리 고르기 → 전체 적용 → 임베딩(`embed_photos.py`)
+      → 채택 판정(`compare_photo.py --group-cv`)을 순서대로 돈다. 진행 `photo_pipeline/pipeline.log`, 단계별 로그 `photo_pipeline/<단계>.log`,
+      끝나면 `photo_pipeline/SUMMARY.txt`. 끝난 단계는 `.done` 파일로 건너뛰므로 꺼졌으면(재부팅 등) 스크립트 docstring의 명령으로 다시 실행.
+      **2026-10-22 21:55 받기(46,700/79,675)와 실행기가 오류 없이 동시에 꺼짐(재부팅 아님)** — Start-Process로 띄운 프로세스가
+      Claude 앱의 프로세스 묶음(job)에 같이 들어가 앱 쪽 정리 때 함께 종료된 것으로 판단. 원래 PC의 01:05 멈춤도 같은 원인으로 보임.
+      10-23 08:27 WMI(`Invoke-CimMethod Win32_Process Create`, 부모 WmiPrvSE)로 다시 띄움 → 192,881에서 이어 받기 정상.
+      **앞으로 오래 도는 작업은 Start-Process 말고 WMI로 띄울 것.**
+      **결과 (2026-10-23):** 받기 끝 11:55(225,845 기록), status 0 재시도 61마리 → 61 모두 성공.
+      2,000장 시험(`photo_clean/clean_check.csv`, seed 0, 보호소 87곳 분류): 같은 보호소 이웃 비율 품종+체중 2.1% / crop 6.0% /
+      글씨 지움 5.8% / 누끼 4.7% / 글씨+누끼 4.6% (우연 1.0%). 보호소 분류 정확도 crop 10.8% → 누끼 9.5%(최빈 7.6%).
+      입양 ROC(사진만, 참고) crop·글씨 0.698, 누끼 0.674 — 누끼는 보호소 정보와 함께 외형 정보도 줄임.
+      줄어든 몫 최대 0.36(글씨+누끼) < 0.5 → **처리 안 함, 자른 사진 그대로.** 글씨 있는 사진 14.2%(보호소별 10/50/90% = 0/8/37%),
+      입양 비율 글씨 있음 0.356 / 없음 0.336. 누끼 0.42초/장(CPU), 글씨 탐지 포함 2,000장 4종 약 30분.
+      임베딩 3종 전체 10분(GPU). compare(사진 있는 개체: 학습 130,907 / 검증 34,120 / 시험 57,210, PCA32 설명 분산 0.63~0.69):
+      보호소 제외 — 기준 시험 ROC 0.745 / PR 0.598 / Brier 0.187, +DINOv2 0.769 / 0.631 / 0.179, +CLIP 0.765 / 0.625, +ConvNeXt 0.762 / 0.619.
+      DINOv2 검증 ΔPR +0.024 [+0.019, +0.030], 시험 +0.032 [+0.027, +0.038] → 규칙상 **채택**(세 모델 모두 하한 > 0).
+      주의: 사진에 보호소 정보가 남아 있어(6.0% vs 2.1%) 이 상승 일부가 보호소 대리일 수 있음 → 보호소 포함 모델·보호소 단위
+      교차검증 결과(12:46 기준 진행 중, `photo_pipeline/compare.log`, 끝나면 `photo_pipeline/SUMMARY.txt`)로 최종 판단.
+      처리 고르기 규칙(계획 2의 "품종+체중 기준 가까이"를 숫자로 정한 것, Claude가 정함): (crop - 처리)/(crop - 품종+체중) >= 0.5인
+      처리 중 가장 많이 줄인 것. 자른 사진 임베딩은 항상 계산하고 처리한 사진 임베딩과 함께 compare 후보로 넣어 검증으로 고른다.
+      환경: 받기는 miniconda base(지금까지와 같은 torchvision), 나머지는 venv `C:\Users\Guest_user\venvs\rne`(torch 2.9.0+cu126,
+      requirements.txt + easyocr·rembg·open_clip·timm·opencv). conda 새 환경은 Anaconda 약관 동의가 필요해 venv로 대신함.
+      작은 시험: 글씨 탐지는 기본값(2배)이 설명 글 오른쪽 절반을 놓쳐 mag_ratio 3·text 0.5·low 0.3으로 바꿈. 누끼는 사람 손·개 위 철창이 남음.
+      사진 임베딩은 GPU로 모델당 약 200장/초(전체 15~20분). compare는 사진 있는 개체만 쓴다(학습 구간의 약 47%).
+      나중 선택지: 파인튜닝(GPU 필요 → Google Colab 또는 새 PC), PetFinder Pawpularity(약 1만 장)로 귀여움 점수 모델을 만들어 우리 사진에 점수.
     - 외부 자료(참고): PetFinder.my Adoption Prediction(Kaggle 2019, 말레이시아, 사진+AdoptionSpeed),
       PetFinder.my Pawpularity(Kaggle 2021, 사진 호감도 점수 약 1만 장 → 호감도 모델을 만들어 우리 사진에 점수 매기는 용도),
       Nakamura 외 2020 Animals(호주 8,332마리, 데이터 비공개; 귀가 선 개·야외 사진은 입양이 늦음).

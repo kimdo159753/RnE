@@ -21,6 +21,7 @@
   원본은 저장하지 않는다. --keep-full이면 원본을 같은 크기로 줄인 것도 photos/full/에 저장(보호소 정보 비교용).
 --crop 없이 쓰면 예전처럼 원본을 photos/<desertionNo>.<확장자>로 저장.
 기록: --meta CSV (상태코드·원본 용량·해상도·업로드 지연일·개 인식 결과). 이미 기록된 개체는 건너뛰므로 끊겨도 이어서 받음.
+  --retry-failed: 받기가 끝난 뒤 같은 명령에 붙여 status 0만 다시 받는다. 같은 개체가 여러 줄이면 마지막 줄이 현재 기록.
 """
 import argparse
 import csv
@@ -193,6 +194,8 @@ def main():
     ap.add_argument("--margin", type=float, default=0.03, help="상자 여백(상자 크기 대비 비율)")
     ap.add_argument("--min-score", type=float, default=0.5, help="개로 인정할 최소 점수")
     ap.add_argument("--quality", type=int, default=85)
+    ap.add_argument("--retry-failed", action="store_true",
+                    help="meta에서 status 0(네트워크 오류)으로 끝난 개체만 다시 받음. 결과는 새 줄로 덧붙인다(404는 그대로)")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -221,7 +224,10 @@ def main():
     done = set()
     if os.path.exists(a.meta):
         with open(a.meta, encoding="utf-8-sig", newline="") as f:
-            done = {r["desertionNo"] for r in csv.DictReader(f)}
+            last = {r["desertionNo"]: r["status"] for r in csv.DictReader(f)}  # 같은 개체가 여러 줄이면 마지막 줄이 현재 기록
+        done = {d for d, st in last.items() if not (a.retry_failed and st == "0")}
+        if a.retry_failed:
+            print(f"네트워크 오류(status 0)로 끝난 {len(last) - len(done):,}마리 다시 받기", flush=True)
     new = not os.path.exists(a.meta)
     mf = open(a.meta, "a", encoding="utf-8-sig", newline="")
     w = csv.DictWriter(mf, fieldnames=fields)
