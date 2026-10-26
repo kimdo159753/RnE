@@ -41,7 +41,9 @@ def split_paras(sec):
 
 
 def text_of(xml):
-    return unescape("".join(re.findall(r"<hp:t>([^<]*)</hp:t>", xml))).strip()
+    # <hp:t> 안에 형광펜(markpenBegin/End) 같은 태그가 끼어 있을 수 있어 태그를 걷어 내고 글만 모은다
+    runs = re.findall(r"<hp:t(?:\s[^>]*)?>(.*?)</hp:t>", xml, re.S)
+    return unescape(re.sub(r"<[^>]+>", "", "".join(runs))).strip()
 
 
 def table_grid(p):
@@ -69,14 +71,17 @@ def extract(src_path, img_dir):
     while i < len(paras):
         p, t = paras[i], texts[i]
         if "<hp:tbl" in p:
+            # 양식으로 조립된 파일은 캡션이 표 안(<hp:caption>)에 있다
+            inner = re.search(r"<hp:caption\b.*?</hp:caption>", p, re.S)
             rows, rel, left = table_grid(p)
             name = f"t{len(c['tables']) + 1}"
-            c["tables"][name] = (pending_cap or "", rel, left, rows)
+            c["tables"][name] = (pending_cap or (text_of(inner.group(0)) if inner else ""), rel, left, rows)
             c["body"].append(("T", name)); pending_cap = None
         elif "<hp:pic" in p:
             bid = re.search(r'binaryItemIDRef="(\w+)"', p).group(1)
             w = int(re.search(r'<hp:sz width="(\d+)"', p).group(1))
             cap = texts[i + 1] if i + 1 < len(texts) and texts[i + 1].startswith("[그림") else ""
+            inner = re.search(r"<hp:caption\b.*?</hp:caption>", p, re.S)
             fn = os.path.basename(bins[bid])
             open(os.path.join(img_dir, fn), "wb").write(z.read(bins[bid]))
             name = f"f{len(c['figs']) + 1}"
@@ -84,9 +89,13 @@ def extract(src_path, img_dir):
             c["body"].append(("F", name))
             if cap:
                 i += 1
+            elif inner:
+                c["figs"][name] = (fn, round(w / mr.MM), text_of(inner.group(0)))
         elif state == "front":
-            m = re.match(r"2026학년도 R&E 프로그램\s*\((.+)\)", t)
-            if m:
+            m = re.match(r"2026학년도 R&E 프로그램\s*\(?(.+?)\)?$", t)
+            if "세상을 바꾸는 힘" in t:  # 양식의 머리 줄(학교명·구호)
+                pass
+            elif m:
                 c["team"] = m.group(1)
             elif t and "·" in t and "지도" not in t and "authors" not in c:
                 c["authors"] = t
@@ -128,14 +137,18 @@ def main():
     img_dir = tempfile.mkdtemp(prefix="hwpx_imgs_")
     c = extract(args.source, img_dir)
     c["figs"] = {k: (fn, round(w * args.fig_scale), cap) for k, (fn, w, cap) in c["figs"].items()}
+    build(c, img_dir, args.template, args.out)
 
+
+def build(c, img_dir, template, out_path):
+    """extract()가 돌려준 내용(c)을 양식 파일(template)의 서식으로 조립해 out_path에 쓴다. 그림 파일은 img_dir에서 읽는다."""
     # make_report_hwpx의 내용 변수를 원본 파일 내용으로 바꿔 끼운 뒤 같은 조립을 쓴다
     mr.TITLE = " ".join(c["title"])
     mr.SUMMARY, mr.KEYWORDS = c["summary"], c["keywords"]
     mr.BODY, mr.TABLES, mr.FIGS, mr.REFS = c["body"], c["tables"], c["figs"], c["refs"]
     mr.FIG_DIR = img_dir
 
-    zin = zipfile.ZipFile(args.template)
+    zin = zipfile.ZipFile(template)
     sec = zin.read("Contents/section0.xml").decode("utf-8")
     start = sec.index(">", sec.index("<hs:sec")) + 1
     end = sec.rindex("</hs:sec>")
@@ -165,7 +178,7 @@ def main():
         items += f'<opf:item id="{bid}" href="BinData/{bid}{os.path.splitext(fn)[1]}" media-type="{mt}" isEmbeded="1"/>'
     hpf = hpf.replace('<opf:item id="section0"', items + '<opf:item id="section0"')
     hpf = re.sub(r'<opf:title xml:space="preserve">[^<]*</opf:title>', f'<opf:title xml:space="preserve">{mr.escape(mr.TITLE)}</opf:title>', hpf)
-    with zipfile.ZipFile(args.out, "w") as zout:
+    with zipfile.ZipFile(out_path, "w") as zout:
         for info in zin.infolist():
             data = zin.read(info.filename)
             if info.filename == "Contents/section0.xml":
@@ -179,7 +192,7 @@ def main():
         for name, bid in bins.items():
             fn = c["figs"][name][0]
             zout.write(os.path.join(img_dir, fn), f"BinData/{bid}{os.path.splitext(fn)[1]}", compress_type=zipfile.ZIP_DEFLATED)
-    print("saved", args.out)
+    print("saved", out_path)
     print("팀코드", c.get("team"), "| 제목", c["title"], "| 본문 문단", sum(b[0] == "P" for b in c["body"]),
           "| 표", len(c["tables"]), "| 그림", len(c["figs"]), "| 참고문헌", len(c["refs"]),
           f"| 추정 쪽수 {mr.estimate_pages():.2f}")

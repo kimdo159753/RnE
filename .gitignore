@@ -22,6 +22,8 @@ abandoned_dogs_sample_*.csv
 memo_check/*
 !memo_check/gold_eval_sample.txt
 !memo_check/eval_sample.csv
+!memo_check/gold_eval_sample2.txt
+!memo_check/eval_sample2.csv
 !memo_check/memo_effects*.csv
 
 # 보고서 산출물(재생성 가능)과 학교 양식
@@ -45,3 +47,6 @@ photo_clean_all/
 photo_pipeline/
 photo_compare/*
 !photo_compare/*.csv
+
+# Claude Docs 내보내기(최종 변환 때 만드는 임시 파일)
+report_docs/export*.md
