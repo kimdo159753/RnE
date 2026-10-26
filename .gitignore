@@ -8,6 +8,7 @@ emb_cache/
 results*/
 model_search/
 final_model/pred_test_*.csv
+final_model_photo*/pred_test_*.csv
 catboost_info/
 *.log
 *.cbm

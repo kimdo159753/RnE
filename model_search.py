@@ -60,6 +60,10 @@ class Data:
         self.i_tr = np.arange(n_trall - n_val)
         self.i_va = np.arange(n_trall - n_val, n_trall)
         self.i_te = np.arange(n_trall, n)
+        if getattr(args, "split", "time") == "random":  # 비교용: 같은 비율로 무작위 분할(설계 기본은 시간순)
+            perm = np.random.default_rng(42).permutation(n)
+            self.i_tr, self.i_va, self.i_te = (np.sort(perm[a:b]) for a, b in
+                                               ((0, n_trall - n_val), (n_trall - n_val, n_trall), (n_trall, n)))
         self.df, self.y = df, df["y"].values
         print(f"학습 {len(self.i_tr)} / 검증 {len(self.i_va)} / 시험 {len(self.i_te)}", flush=True)
 
