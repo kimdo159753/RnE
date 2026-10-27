@@ -32,7 +32,7 @@ def fig_flow(path):
              ("정제·정답 정의", "2021~2025 접수\n320,426마리"),
              ("메모 누수 제거", "결과 문구 구절 삭제\n10,693건"),
              ("변수 만들기", "범주·숫자 12개\n+ 메모 33개"),
-             ("모델 비교", "5개 계열 + 앙상블\n검증 구간 선택"),
+             ("모델 비교", "5개 모델 계열\n검증 구간 선택"),
              ("최종 평가·해석", "시험 구간 1회\n메모 항목 효과")]
     fig, ax = plt.subplots(figsize=(9.0, 2.0), dpi=200)
     ax.set_xlim(0, 6); ax.set_ylim(0, 1); ax.axis("off")
@@ -124,6 +124,9 @@ NAMES = {"성격_공격": "공격성", "건강_감염병": "감염병 양성", "
 def fig_effects(path):
     a = pd.read_csv("memo_check/memo_effects.csv", encoding="utf-8-sig")
     b = pd.read_csv("memo_check/memo_effects_model2.csv", encoding="utf-8-sig").set_index("항목")
+    # 보호소 기록 양식은 회귀에는 통제 변수로 남기되 그림에서는 뺀다(개의 특징이 아니라 보호소 표시, 본문에서 따로 설명, 2026-10-23 팀 의견)
+    # 등장 2,000건 미만(농장 출신·칩·소형)도 신뢰구간이 너무 넓어 그림에서 뺀다(회귀에는 그대로, 2026-10-23)
+    a = a[(a["항목"] != "서식_양식") & (a["등장"] >= 2000)]
     a["lo2"], a["hi2"] = a["항목"].map(b["오즈비_하한"]), a["항목"].map(b["오즈비_상한"])
     a = a.sort_values("오즈비_보호소통제", ascending=False).reset_index(drop=True)
     fig, ax = plt.subplots(figsize=(6.6, 5.2), dpi=200)

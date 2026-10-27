@@ -14,6 +14,7 @@ import pickle
 import numpy as np
 import pandas as pd
 
+from accuracy_table import acc, boot_acc_diff
 from compare_text_repr import boot_diff
 from model_search import Data, fit_catboost, score
 
@@ -51,17 +52,27 @@ def main():
             pv, pt, info = fit_catboost(D, shelter, cfg)
             preds[v] = (pv, pt)
             sv, st = score(D.y[D.i_va], pv), score(D.y[D.i_te], pt)
-            print(f"[{name}] {v:<10} 검증 PR {sv['pr_auc']:.4f} ROC {sv['roc_auc']:.4f} | 시험 PR {st['pr_auc']:.4f} "
-                  f"ROC {st['roc_auc']:.4f} (트리 {info['iters']})", flush=True)
+            sv["acc"], st["acc"] = acc(D.y[D.i_va], pv), acc(D.y[D.i_te], pt)
+            print(f"[{name}] {v:<10} 검증 PR {sv['pr_auc']:.4f} ROC {sv['roc_auc']:.4f} 정확도 {sv['acc']:.4f} | "
+                  f"시험 PR {st['pr_auc']:.4f} ROC {st['roc_auc']:.4f} 정확도 {st['acc']:.4f} (트리 {info['iters']})", flush=True)
             rows.append({"모델": name, "변형": v, **{f"검증_{k}": x for k, x in sv.items()}, **{f"시험_{k}": x for k, x in st.items()}})
         for v in list(variants)[1:]:
             (vm, vl, vh), (vrm, _, _) = boot_diff(D.y[D.i_va], preds[v][0], preds["전체"][0], g_va)
             (tm, tl, th), (trm, _, _) = boot_diff(D.y[D.i_te], preds[v][1], preds["전체"][1], g_te)
             verdict = "빼면 확실히 나빠짐" if vh < 0 else ("빼면 확실히 좋아짐" if vl > 0 else "차이 불확실")
+            va_a = boot_acc_diff(D.y[D.i_va], preds[v][0], preds["전체"][0], g_va)
+            te_a = boot_acc_diff(D.y[D.i_te], preds[v][1], preds["전체"][1], g_te)
             print(f"[{name}] {v} - 전체: 검증 ΔPR {vm:+.4f} [{vl:+.4f}, {vh:+.4f}] ΔROC {vrm:+.4f} | "
                   f"시험 ΔPR {tm:+.4f} [{tl:+.4f}, {th:+.4f}] ΔROC {trm:+.4f} → {verdict}", flush=True)
+            print(f"[{name}] {v} - 전체: 검증 Δ정확도 {va_a[0]:+.4f} [{va_a[1]:+.4f}, {va_a[2]:+.4f}] | "
+                  f"시험 Δ정확도 {te_a[0]:+.4f} [{te_a[1]:+.4f}, {te_a[2]:+.4f}]", flush=True)
             rows.append({"모델": name, "변형": f"{v} - 전체", "검증_dPR": vm, "검증_dPR_lo": vl, "검증_dPR_hi": vh,
-                         "시험_dPR": tm, "시험_dPR_lo": tl, "시험_dPR_hi": th, "판정": verdict})
+                         "시험_dPR": tm, "시험_dPR_lo": tl, "시험_dPR_hi": th, "판정": verdict,
+                         "검증_dacc": va_a[0], "검증_dacc_lo": va_a[1], "검증_dacc_hi": va_a[2],
+                         "시험_dacc": te_a[0], "시험_dacc_lo": te_a[1], "시험_dacc_hi": te_a[2]})
+        # 예측값 저장(정확도 등 다른 지표를 나중에 다시 계산할 수 있게)
+        np.savez(os.path.join(args.out, f"preds_{name}.npz"), y_va=D.y[D.i_va], y_te=D.y[D.i_te], g_va=g_va, g_te=g_te,
+                 **{f"{v}__va": p[0] for v, p in preds.items()}, **{f"{v}__te": p[1] for v, p in preds.items()})
     fn = "ablation.csv" if args.shelter == "both" else f"ablation_{args.shelter}_shelter.csv"
     pd.DataFrame(rows).to_csv(os.path.join(args.out, fn), index=False, encoding="utf-8-sig")
     print(f"결과: {args.out}/{fn}")
