@@ -28,6 +28,7 @@ def main():
     ap.add_argument("--lr-pca", type=int, default=128)
     ap.add_argument("--stride", type=int, default=1)
     ap.add_argument("--out", default="ablation")
+    ap.add_argument("--split", choices=["time", "random"], default="time")
     ap.add_argument("--shelter", choices=["both", "with", "without"], default="both")
     ap.add_argument("--variants", default="단어 점수 제거,임베딩 제거,메모 전부 제거")
     args = ap.parse_args()
@@ -35,9 +36,11 @@ def main():
 
     D = Data(args)
     txt0, p0, len0 = D.txt.copy(), D.P32.copy(), D.df["mark_len"].copy()
-    # (단어 점수, 임베딩, 메모 길이) 사용 여부
-    ALL = {"전체": (True, True, True), "단어 점수 제거": (False, True, True),
-           "임베딩 제거": (True, False, True), "메모 전부 제거": (False, False, False)}
+    # (단어 점수, 임베딩, 메모 길이, CatBoost 형태소 텍스트 입력) 사용 여부.
+    # 형태소 텍스트 입력은 설정이 text_features=True일 때만 있다(무작위 분할 최고 설정). 2026-10-28 전엔 메모 전부 제거에서도 남아 있었음.
+    ALL = {"전체": (True, True, True, True), "단어 점수 제거": (False, True, True, True),
+           "임베딩 제거": (True, False, True, True), "형태소 입력 제거": (True, True, True, False),
+           "메모 전부 제거": (False, False, False, False)}
     variants = {"전체": ALL["전체"], **{v: ALL[v] for v in args.variants.split(",")}}
     g_va, g_te = D.df["care"].values[D.i_va], D.df["care"].values[D.i_te]
     rows = []
@@ -45,11 +48,11 @@ def main():
         name = "with_shelter" if shelter else "without_shelter"
         cfg = pickle.load(open(os.path.join(args.search, f"catboost_{name}.pkl"), "rb"))["best"]["cfg"]
         preds = {}
-        for v, (use_txt, use_emb, use_len) in variants.items():
+        for v, (use_txt, use_emb, use_len, use_tok) in variants.items():
             D.txt = txt0 if use_txt else np.zeros_like(txt0)
             D.P32 = p0 if use_emb else np.zeros_like(p0)
             D.df["mark_len"] = len0 if use_len else 0
-            pv, pt, info = fit_catboost(D, shelter, cfg)
+            pv, pt, info = fit_catboost(D, shelter, {**cfg, "text_features": cfg.get("text_features", False) and use_tok})
             preds[v] = (pv, pt)
             sv, st = score(D.y[D.i_va], pv), score(D.y[D.i_te], pt)
             sv["acc"], st["acc"] = acc(D.y[D.i_va], pv), acc(D.y[D.i_te], pt)

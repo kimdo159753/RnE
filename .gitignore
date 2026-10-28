@@ -50,3 +50,9 @@ photo_compare/*
 
 # Claude Docs 내보내기(최종 변환 때 만드는 임시 파일)
 report_docs/export*.md
+
+# 무작위 분할 재학습(2026-10-28): 예측·로그·그림은 다시 만들 수 있음, 요약 CSV만 커밋
+final_model_random*/pred_test_*.csv
+random_run/
+random_run_runner.out
+report_fig_random/

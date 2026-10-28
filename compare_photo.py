@@ -65,6 +65,7 @@ def main():
     ap.add_argument("--n-pca", type=int, default=32)
     ap.add_argument("--group-cv", action="store_true")
     ap.add_argument("--out", default="photo_compare")
+    ap.add_argument("--split", choices=["time", "random"], default="time")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 

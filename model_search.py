@@ -121,6 +121,22 @@ def fit_logistic(D, shelter, cfg):
     return m.predict_proba(X[D.i_va])[:, 1], m.predict_proba(X[D.i_te])[:, 1], {}
 
 
+def fit_svm(D, shelter, cfg):
+    """선형 SVM(LinearSVC). 입력은 로지스틱과 같다(원-핫 + 숫자 + TF-IDF + 임베딩 PCA128).
+    커널 SVM은 계산량이 표본 수의 제곱 이상이라 학습 20만 개체에는 쓸 수 없어 선형 커널을 쓴다.
+    확률을 내지 않으므로 결정값 d를 1/(1+e^-d)로 바꿔 돌려준다: 순위(ROC·PR)는 그대로이고, 0.5 기준 판정 = SVM 자체 판정(d≥0)."""
+    from sklearn.svm import LinearSVC
+    oh = OneHotEncoder(handle_unknown="ignore", min_frequency=10).fit(D.df[D.cats(shelter)].iloc[D.i_tr])
+    num = D.df[NUM].astype(float)
+    imp = SimpleImputer(strategy="median").fit(num.iloc[D.i_tr])
+    sc = StandardScaler().fit(imp.transform(num.iloc[D.i_tr]))
+    X = hstack([oh.transform(D.df[D.cats(shelter)]), csr_matrix(sc.transform(imp.transform(num))), D.T,
+                csr_matrix(D.P128.astype(np.float32))]).tocsr()
+    m = LinearSVC(C=cfg["C"], max_iter=5000, dual=True, random_state=42).fit(X[D.i_tr], D.y[D.i_tr])
+    sig = lambda d: 1 / (1 + np.exp(-d))
+    return sig(m.decision_function(X[D.i_va])), sig(m.decision_function(X[D.i_te])), {}
+
+
 def fit_lightgbm(D, shelter, cfg):
     import lightgbm as lgb
     X = D.tree_frame(shelter)
@@ -228,6 +244,7 @@ def fit_mlp(D, shelter, cfg):
 
 SPACES = {
     "logistic": {"C": [0.03, 0.1, 0.3, 1.0]},
+    "svm": {"C": [0.003, 0.01, 0.03, 0.1]},
     "lightgbm": {"num_leaves": [31, 63, 127, 255], "min_child_samples": [20, 100, 300], "colsample_bytree": [0.6, 0.8, 1.0],
                  "subsample": [0.7, 0.9, 1.0], "subsample_freq": [1], "reg_lambda": [0.0, 1.0, 10.0],
                  "cat_smooth": [10, 50], "min_data_per_group": [50, 200], "max_cat_to_onehot": [4]},
@@ -236,7 +253,7 @@ SPACES = {
     "catboost": {"depth": [6, 8], "l2_leaf_reg": [3, 10, 30], "text_features": [True, False]},
     "mlp": {"hidden": [256, 512], "dropout": [0.2, 0.4], "lr": [1e-3, 3e-3], "wd": [1e-5, 1e-4]},
 }
-FIT = {"logistic": fit_logistic, "lightgbm": fit_lightgbm, "xgboost": fit_xgboost, "catboost": fit_catboost, "mlp": fit_mlp}
+FIT = {"logistic": fit_logistic, "svm": fit_svm, "lightgbm": fit_lightgbm, "xgboost": fit_xgboost, "catboost": fit_catboost, "mlp": fit_mlp}
 
 
 def run_family(D, fam, shelter, n_cfg, out):
@@ -245,7 +262,7 @@ def run_family(D, fam, shelter, n_cfg, out):
         print(f"  [{fam} shelter={shelter}] 이미 있음 → 건너뜀", flush=True)
         return pickle.load(open(path, "rb"))
     space = SPACES[fam]
-    if fam == "logistic":
+    if fam in ("logistic", "svm"):
         cfgs = [{"C": c} for c in space["C"]]
     elif fam == "catboost":
         cfgs = sample_configs(space, n_cfg, seed=1)
@@ -276,14 +293,16 @@ def main():
     ap.add_argument("--n-cfg", type=int, default=8, help="계열별 무작위 설정 조합 수 (로지스틱은 C 4개 고정)")
     ap.add_argument("--lr-pca", type=int, default=128)
     ap.add_argument("--stride", type=int, default=1, help="시험 실행용")
-    ap.add_argument("--families", nargs="+", default=FAMILIES)
+    ap.add_argument("--families", nargs="+", default=FAMILIES, help=f"고를 수 있는 계열: {list(FIT)}")
+    ap.add_argument("--split", choices=["time", "random"], default="time")
+    ap.add_argument("--shelters", choices=["both", "with", "without"], default="both")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
     D = Data(args)
     g_va, g_te = D.df["care"].values[D.i_va], D.df["care"].values[D.i_te]
     summary = []
-    for shelter in (False, True):
+    for shelter in {"both": (False, True), "with": (True,), "without": (False,)}[args.shelters]:
         tag = "보호소 포함" if shelter else "보호소 제외"
         print(f"\n========== {tag} ==========", flush=True)
         res = {fam: run_family(D, fam, shelter, args.n_cfg, args.out) for fam in args.families}
@@ -315,7 +334,7 @@ def main():
         summary.append(tab)
         np.savez(os.path.join(args.out, f"preds_{'with' if shelter else 'without'}_shelter.npz"),
                  **{f"val_{k}": v for k, v in pv.items()}, **{f"test_{k}": v for k, v in pt.items()},
-                 y_val=D.y[D.i_va], y_test=D.y[D.i_te])
+                 y_val=D.y[D.i_va], y_test=D.y[D.i_te], g_val=g_va.astype(str), g_test=g_te.astype(str))
     pd.concat(summary).to_csv(os.path.join(args.out, "summary.csv"), index=False, encoding="utf-8-sig")
     print(f"\n결과 파일: {args.out}/")
 

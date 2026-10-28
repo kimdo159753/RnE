@@ -29,10 +29,10 @@ BLUE, GREY, DARK = "#2a78d6", "#9a9a9a", "#333333"
 
 def fig_flow(path):
     steps = [("데이터 수집", "공공데이터 API\n433,422마리"),
-             ("정제·정답 정의", "2021~2025 접수\n320,426마리"),
-             ("메모 누수 제거", "결과 문구 구절 삭제\n10,693건"),
-             ("변수 만들기", "범주·숫자 12개\n+ 메모 33개"),
-             ("모델 비교", "5개 모델 계열\n검증 구간 선택"),
+             ("정제·정답 정의", "320,426마리\n무작위 분할"),
+             ("메모 누수 제거", "결과 문구 삭제\n10,693건"),
+             ("변수 만들기", "범주·숫자 12개\n메모 33·사진 32개"),
+             ("모델 비교", "6개 계열(SVM 포함)\n검증 구간 선택"),
              ("최종 평가·해석", "시험 구간 1회\n메모 항목 효과")]
     fig, ax = plt.subplots(figsize=(9.0, 2.0), dpi=200)
     ax.set_xlim(0, 6); ax.set_ylim(0, 1); ax.axis("off")
@@ -74,8 +74,11 @@ def fig_eda(path):
     fig.savefig(path, bbox_inches="tight", facecolor="white"); plt.close(fig)
 
 
+MODEL_DIR = "final_model"  # --model-dir로 바꿈(무작위 분할 기본 모델: final_model_random_base)
+
+
 def fig_decile(path):
-    t = pd.read_csv("final_model/pred_test_without_shelter.csv")
+    t = pd.read_csv(os.path.join(MODEL_DIR, "pred_test_without_shelter.csv"))
     t["bin"] = pd.qcut(t["p_cal"], 10, labels=False)
     g = t.groupby("bin").agg(pred=("p_cal", "mean"), real=("y", "mean"))
     fig, ax = plt.subplots(figsize=(6.4, 3.4), dpi=200)
@@ -96,7 +99,7 @@ def fig_decile(path):
 
 def fig_percentile(path):
     """예측 확률 백분위(1~100)별 실제 입양률 (최종 모델, 보호소 포함, 보정 후)"""
-    t = pd.read_csv("final_model/pred_test_with_shelter.csv")
+    t = pd.read_csv(os.path.join(MODEL_DIR, "pred_test_with_shelter.csv"))
     t["bin"] = pd.qcut(t["p_cal"].rank(method="first"), 100, labels=False)
     g = t.groupby("bin").agg(pred=("p_cal", "mean"), real=("y", "mean"))
     fig, ax = plt.subplots(figsize=(6.4, 3.3), dpi=200)
@@ -159,7 +162,10 @@ def fig_effects(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="report_fig")
+    ap.add_argument("--model-dir", default="final_model", help="그림 2·4(분위)에 쓸 train_final.py 결과 폴더")
     args = ap.parse_args()
+    global MODEL_DIR
+    MODEL_DIR = args.model_dir
     os.makedirs(args.out, exist_ok=True)
     fig_flow(os.path.join(args.out, "fig1_flow.png"))
     fig_eda(os.path.join(args.out, "fig_eda.png"))

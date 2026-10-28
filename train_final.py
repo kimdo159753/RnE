@@ -10,6 +10,8 @@ model_search.py에서 고른 구성(CatBoost, 계열별 최고 설정)을 같은
   # 사진 임베딩 추가(compare_photo.py에서 DINOv2 채택): 사진 있는 개체만 학습·평가한다
   python train_final.py --csv abandoned_dogs.csv --emb emb_cache/e5_base_v2.npz --search model_search \
       --photo emb_cache/photo_dinov2.npz --out final_model_photo_v2
+  # 최종(2026-10-27 팀 결정): 무작위 분할 + 사진
+  python train_final.py ... --photo emb_cache/photo_dinov2.npz --split random --out final_model_random
 
 --photo: 사진이 있는 개체(2022~2025, 접수 3일 이내 사진)만 남기고 사진 PCA 32개(학습 구간에서만 맞춤)를 입력에 더한다.
   사진 없는 개체를 결측으로 넣으면 "사진이 늦게 올라옴" 자체가 결과 신호가 될 수 있어 넣지 않는다.
@@ -76,6 +78,8 @@ def main():
     ap.add_argument("--stride", type=int, default=1)
     ap.add_argument("--photo", help="사진 임베딩 npz(embed_photos.py 결과). 주면 사진 있는 개체만 쓰고 사진 PCA를 더한다")
     ap.add_argument("--photo-pca", type=int, default=32)
+    ap.add_argument("--split", choices=["time", "random"], default="time",
+                    help="random = 같은 비율(학습 68 / 검증 12 / 시험 20%%)을 무작위로(seed 42). 2026-10-27 팀 결정으로 최종 모델은 random")
     ap.add_argument("--out", default="final_model")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
