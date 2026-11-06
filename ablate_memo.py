@@ -16,7 +16,7 @@ import pandas as pd
 
 from accuracy_table import acc, boot_acc_diff
 from compare_text_repr import boot_diff
-from model_search import Data, fit_catboost, score
+from model_search import FIT, Data, score
 
 
 def main():
@@ -30,6 +30,7 @@ def main():
     ap.add_argument("--out", default="ablation")
     ap.add_argument("--split", choices=["time", "random"], default="time")
     ap.add_argument("--shelter", choices=["both", "with", "without"], default="both")
+    ap.add_argument("--family", choices=["catboost", "lightgbm"], default="catboost")
     ap.add_argument("--variants", default="단어 점수 제거,임베딩 제거,메모 전부 제거")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -46,13 +47,14 @@ def main():
     rows = []
     for shelter in {"both": (False, True), "with": (True,), "without": (False,)}[args.shelter]:
         name = "with_shelter" if shelter else "without_shelter"
-        cfg = pickle.load(open(os.path.join(args.search, f"catboost_{name}.pkl"), "rb"))["best"]["cfg"]
+        cfg = pickle.load(open(os.path.join(args.search, f"{args.family}_{name}.pkl"), "rb"))["best"]["cfg"]
         preds = {}
         for v, (use_txt, use_emb, use_len, use_tok) in variants.items():
             D.txt = txt0 if use_txt else np.zeros_like(txt0)
             D.P32 = p0 if use_emb else np.zeros_like(p0)
             D.df["mark_len"] = len0 if use_len else 0
-            pv, pt, info = fit_catboost(D, shelter, {**cfg, "text_features": cfg.get("text_features", False) and use_tok})
+            c = {**cfg, "text_features": cfg["text_features"] and use_tok} if args.family == "catboost" else cfg
+            pv, pt, info = FIT[args.family](D, shelter, c)
             preds[v] = (pv, pt)
             sv, st = score(D.y[D.i_va], pv), score(D.y[D.i_te], pt)
             sv["acc"], st["acc"] = acc(D.y[D.i_va], pv), acc(D.y[D.i_te], pt)

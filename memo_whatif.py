@@ -20,7 +20,7 @@ from text_analysis import tokenize_all
 from train_adoption import mask_leak, prepare
 from train_final import apply_cal
 
-MEMOS = ["", "순함", "겁이 많지만 애교 많음", "순하지만 피부병 심함", "파보 양성", "공격성 없음", "겁이 많음", "피부병 심함"]
+MEMOS = ["순함", "겁이 많지만 애교 많음", "순하지만 피부병 심함", "파보 양성", "공격성 없음", "겁이 많음", "피부병 심함"]  # 빈 메모는 학습에서 뺐으므로 비교하지 않는다
 
 
 def main():
@@ -44,8 +44,12 @@ def main():
     print("기준 개:", base)
 
     prep = pickle.load(open(os.path.join(args.model, "preprocess.pkl"), "rb"))
-    model = CatBoostClassifier().load_model(os.path.join(args.model, "catboost_with_shelter.cbm"))
-    cal = pickle.load(open(os.path.join(args.model, "calibrator_with_shelter.pkl"), "rb"))["calibrator"]
+    family = prep.get("family", "catboost")
+    if family == "catboost":
+        model = CatBoostClassifier().load_model(os.path.join(args.model, "catboost_with_shelter.cbm"))
+    else:
+        model = pickle.load(open(os.path.join(args.model, "lightgbm_with_shelter.pkl"), "rb"))
+    cal =pickle.load(open(os.path.join(args.model, "calibrator_with_shelter.pkl"), "rb"))["calibrator"]
     from sentence_transformers import SentenceTransformer
     st = SentenceTransformer(prep["emb_model"])
 
@@ -59,9 +63,10 @@ def main():
         r = {**base, "mark_len": len(m), "txt_lr": txt[i], "tokens": str(toks.iloc[i]),
              **{f"emb{k}": pcs[i, k] for k in range(32)}}
         rows.append(r)
-    X = pd.DataFrame(rows)[model.feature_names_]
+    names = model.feature_names_ if family == "catboost" else list(model.feature_name_)
+    X = pd.DataFrame(rows)[names]
     for c in ["breed", "color", "sex", "neuter", "sido", "care"]:
-        X[c] = X[c].astype(str)
+        X[c] = X[c].astype(str) if family == "catboost" else pd.Categorical(X[c], categories=prep["categories"][c])
     p = apply_cal(cal, model.predict_proba(X)[:, 1])
     out = pd.DataFrame({"메모": [m or "(메모 없음)" for m in MEMOS], "예측 입양 확률": np.round(p * 100, 1)})
     out = out.sort_values("예측 입양 확률", ascending=False)

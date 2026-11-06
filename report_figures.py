@@ -29,11 +29,11 @@ BLUE, GREY, DARK = "#2a78d6", "#9a9a9a", "#333333"
 
 def fig_flow(path):
     steps = [("데이터 수집", "공공데이터 API\n433,422마리"),
-             ("정제·정답 정의", "320,426마리\n무작위 분할"),
-             ("메모 누수 제거", "결과 문구 삭제\n10,693건"),
+             ("메모 누수 제거", "결과 문구 삭제\n빈 메모 제외"),
+             ("정제·정답 정의", "315,962마리\n무작위 분할"),
              ("변수 만들기", "범주·숫자 12개\n메모 33·사진 32개"),
-             ("모델 비교", "6개 계열(SVM 포함)\n검증 구간 선택"),
-             ("최종 평가·해석", "시험 구간 1회\n메모 항목 효과")]
+             ("모델 비교", "6개 계열 비교\n검증 구간 선택"),
+             ("최종 평가·해석", "시험 구간·2026년\n메모 항목 효과")]
     fig, ax = plt.subplots(figsize=(9.0, 2.0), dpi=200)
     ax.set_xlim(0, 6); ax.set_ylim(0, 1); ax.axis("off")
     for i, (h, b) in enumerate(steps):
@@ -124,9 +124,9 @@ NAMES = {"성격_공격": "공격성", "건강_감염병": "감염병 양성", "
          "외모_칭찬": "외모 칭찬", "성격_온순": "온순", "관리_미용옷": "미용·옷"}
 
 
-def fig_effects(path):
-    a = pd.read_csv("memo_check/memo_effects.csv", encoding="utf-8-sig")
-    b = pd.read_csv("memo_check/memo_effects_model2.csv", encoding="utf-8-sig").set_index("항목")
+def fig_effects(path, memo_dir="memo_check"):
+    a = pd.read_csv(os.path.join(memo_dir, "memo_effects.csv"), encoding="utf-8-sig")
+    b = pd.read_csv(os.path.join(memo_dir, "memo_effects_model2.csv"), encoding="utf-8-sig").set_index("항목")
     # 보호소 기록 양식은 회귀에는 통제 변수로 남기되 그림에서는 뺀다(개의 특징이 아니라 보호소 표시, 본문에서 따로 설명, 2026-10-23 팀 의견)
     # 등장 2,000건 미만(농장 출신·칩·소형)도 신뢰구간이 너무 넓어 그림에서 뺀다(회귀에는 그대로, 2026-10-23)
     a = a[(a["항목"] != "서식_양식") & (a["등장"] >= 2000)]
@@ -163,6 +163,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="report_fig")
     ap.add_argument("--model-dir", default="final_model", help="그림 2·4(분위)에 쓸 train_final.py 결과 폴더")
+    ap.add_argument("--memo-dir", default="memo_check", help="그림 3에 쓸 memo_effects.py 결과 폴더")
     args = ap.parse_args()
     global MODEL_DIR
     MODEL_DIR = args.model_dir
@@ -171,7 +172,7 @@ def main():
     fig_eda(os.path.join(args.out, "fig_eda.png"))
     fig_decile(os.path.join(args.out, "fig2_decile.png"))
     fig_percentile(os.path.join(args.out, "fig_percentile_shelter.png"))
-    fig_effects(os.path.join(args.out, "fig3_effects.png"))
+    fig_effects(os.path.join(args.out, "fig3_effects.png"), args.memo_dir)
     print("saved", os.listdir(args.out))
 
 

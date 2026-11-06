@@ -26,7 +26,7 @@ from sklearn.decomposition import PCA
 
 from compare_photo import load_photo, set_photo
 from compare_text_repr import boot_diff
-from model_search import Data, fit_catboost, score
+from model_search import FIT, Data, importance, score
 from train_adoption import calibration_table
 from train_final import apply_cal, choose_calibration, make_calibrator
 
@@ -54,6 +54,7 @@ def main():
     ap.add_argument("--lr-pca", type=int, default=128)
     ap.add_argument("--stride", type=int, default=1)
     ap.add_argument("--splits", nargs="+", default=["time", "random"])
+    ap.add_argument("--family", choices=["catboost", "lightgbm"], default="catboost")
     ap.add_argument("--out", default="final_model_photo")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -81,11 +82,11 @@ def main():
         D.i_tr, D.i_va, D.i_te = tr, va, te
         for shelter in (False, True):
             name = "with_shelter" if shelter else "without_shelter"
-            cfg = pickle.load(open(os.path.join(args.search, f"catboost_{name}.pkl"), "rb"))["best"]["cfg"]
+            cfg = pickle.load(open(os.path.join(args.search, f"{args.family}_{name}.pkl"), "rb"))["best"]["cfg"]
             preds = {}
             for v, PP in (("기준", None), ("사진", P)):
                 set_photo(D, PP)
-                pv, pt, info, model = fit_catboost(D, shelter, cfg, return_model=True)
+                pv, pt, info, model = FIT[args.family](D, shelter, cfg, return_model=True)
                 kind, _ = choose_calibration(pv, y_va)
                 cal = make_calibrator(kind, pv, y_va)
                 pv_c, pt_c = apply_cal(cal, pv), apply_cal(cal, pt)
@@ -104,11 +105,12 @@ def main():
                       f"정밀도 {a5['precision']:.3f} 재현율 {a5['recall']:.3f} | 검증 최적 기준 {thr} → ACC {ab['acc']:.4f}",
                       flush=True)
                 if split == "time" and v == "사진":
-                    model.save_model(os.path.join(args.out, f"catboost_{name}.cbm"))
+                    if args.family == "catboost":
+                        model.save_model(os.path.join(args.out, f"catboost_{name}.cbm"))
                     pickle.dump({"calibrator": cal, "kind": kind, "acc_threshold": thr},
                                 open(os.path.join(args.out, f"calibrator_{name}.pkl"), "wb"))
                     print("보정표(시험, 보정 후):\n" + calibration_table(y_te, pt_c).to_string(), flush=True)
-                    imp = pd.Series(model.get_feature_importance(), index=model.feature_names_)
+                    imp = importance(model)
                     groups = {"사진(합계)": [c for c in imp.index if c.startswith("photo")],
                               "메모 임베딩(합계)": [c for c in imp.index if c.startswith("emb")]}
                     show = imp.drop(sum(groups.values(), []))

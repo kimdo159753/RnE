@@ -137,13 +137,14 @@ def fit_svm(D, shelter, cfg):
     return sig(m.decision_function(X[D.i_va])), sig(m.decision_function(X[D.i_te])), {}
 
 
-def fit_lightgbm(D, shelter, cfg):
+def fit_lightgbm(D, shelter, cfg, return_model=False):
     import lightgbm as lgb
     X = D.tree_frame(shelter)
     m = lgb.LGBMClassifier(n_estimators=5000, learning_rate=0.03, verbose=-1, n_jobs=-1, random_state=42, **cfg)
     m.fit(X.iloc[D.i_tr], D.y[D.i_tr], eval_set=[(X.iloc[D.i_va], D.y[D.i_va])],
           callbacks=[lgb.early_stopping(100, verbose=False)])
-    return m.predict_proba(X.iloc[D.i_va])[:, 1], m.predict_proba(X.iloc[D.i_te])[:, 1], {"iters": m.best_iteration_}
+    out = (m.predict_proba(X.iloc[D.i_va])[:, 1], m.predict_proba(X.iloc[D.i_te])[:, 1], {"iters": m.best_iteration_})
+    return out + (m,) if return_model else out
 
 
 def fit_xgboost(D, shelter, cfg):
@@ -254,6 +255,14 @@ SPACES = {
     "mlp": {"hidden": [256, 512], "dropout": [0.2, 0.4], "lr": [1e-3, 3e-3], "wd": [1e-5, 1e-4]},
 }
 FIT = {"logistic": fit_logistic, "svm": fit_svm, "lightgbm": fit_lightgbm, "xgboost": fit_xgboost, "catboost": fit_catboost, "mlp": fit_mlp}
+
+
+def importance(model):
+    """변수 중요도(합계 100). CatBoost는 그대로, LightGBM은 gain을 백분율로 바꾼다."""
+    if hasattr(model, "feature_names_"):
+        return pd.Series(model.get_feature_importance(), index=model.feature_names_)
+    imp = pd.Series(model.booster_.feature_importance("gain"), index=model.booster_.feature_name())
+    return imp / imp.sum() * 100
 
 
 def run_family(D, fam, shelter, n_cfg, out):

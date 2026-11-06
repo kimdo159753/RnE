@@ -157,6 +157,10 @@ def prepare(raw, include_returned, max_date=None):
     df = df[df["outcome"] != "released"]
     if not include_returned:
         df = df[df["outcome"] != "returned"]
+    # 2026-11-02 팀 결정: 누수 제거 뒤 글자·숫자가 없는 메모(빈 글, '-', '.')는 뺀다. 지워져서 빈 메모는 결과 신호가 된다(입양률 49.5%, 원래 빈 메모 58%)
+    has_text = df["mark"].str.contains(r"[0-9A-Za-z가-힣]", regex=True)
+    print(f"\n메모에 글자가 없는 {int((~has_text).sum())}건 제외(입양 비율 {(df.loc[~has_text, 'outcome'] == 'adopted').mean():.3f})")
+    df = df[has_text]
     df["y"] = (df["outcome"] == "adopted").astype(int)
     df = df.sort_values("date").reset_index(drop=True)
     print(f"\n사용 표본 {len(df)}건, 입양 비율 {df['y'].mean():.3f}, 기간 {df['date'].min().date()} ~ {df['date'].max().date()}")

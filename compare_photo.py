@@ -27,7 +27,7 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 
 from compare_text_repr import boot_diff
-from model_search import Data, fit_catboost, score
+from model_search import FIT, Data, score
 
 
 def load_photo(path, ids):
@@ -46,11 +46,11 @@ def set_photo(D, P):
         (lambda shelter: D._tree_frame(shelter).assign(**{f"photo{i}": P[:, i] for i in range(P.shape[1])}))
 
 
-def run(D, shelter, cfg, P, idx):
-    """idx = (학습, 검증, 시험) 행 번호로 CatBoost를 맞춰 (검증 예측, 시험 예측, 정보)."""
+def run(D, shelter, cfg, P, idx, family="catboost"):
+    """idx = (학습, 검증, 시험) 행 번호로 모델을 맞춰 (검증 예측, 시험 예측, 정보)."""
     D.i_tr, D.i_va, D.i_te = idx
     set_photo(D, P)
-    return fit_catboost(D, shelter, cfg)
+    return FIT[family](D, shelter, cfg)
 
 
 def main():
@@ -66,6 +66,7 @@ def main():
     ap.add_argument("--group-cv", action="store_true")
     ap.add_argument("--out", default="photo_compare")
     ap.add_argument("--split", choices=["time", "random"], default="time")
+    ap.add_argument("--family", choices=["catboost", "lightgbm"], default="catboost")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -93,12 +94,12 @@ def main():
     rows, chosen = [], {}
     for shelter in (False, True):
         name = "with_shelter" if shelter else "without_shelter"
-        cfg = pickle.load(open(os.path.join(args.search, f"catboost_{name}.pkl"), "rb"))["best"]["cfg"]
+        cfg = pickle.load(open(os.path.join(args.search, f"{args.family}_{name}.pkl"), "rb"))["best"]["cfg"]
         cache = os.path.join(args.out, f"preds_{name}.npz")
         preds = dict(np.load(cache)) if os.path.exists(cache) else {}
         for v in ["기준"] + list(P):
             if f"val_{v}" not in preds:
-                pv, pt, info = run(D, shelter, cfg, None if v == "기준" else P[v], (tr, va, te))
+                pv, pt, info = run(D, shelter, cfg, None if v == "기준" else P[v], (tr, va, te), args.family)
                 preds[f"val_{v}"], preds[f"test_{v}"] = pv, pt
                 np.savez(cache, **preds)
                 print(f"[{name}] {v} 트리 {info['iters']}", flush=True)

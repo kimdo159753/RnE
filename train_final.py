@@ -28,7 +28,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 
-from model_search import NUM, Data, fit_catboost, score
+from model_search import FIT, NUM, Data, importance, score
 from train_adoption import calibration_table
 
 
@@ -80,6 +80,7 @@ def main():
     ap.add_argument("--photo-pca", type=int, default=32)
     ap.add_argument("--split", choices=["time", "random"], default="time",
                     help="random = 같은 비율(학습 68 / 검증 12 / 시험 20%%)을 무작위로(seed 42). 2026-10-27 팀 결정으로 최종 모델은 random")
+    ap.add_argument("--family", choices=["catboost", "lightgbm"], default="catboost")
     ap.add_argument("--out", default="final_model")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -100,9 +101,9 @@ def main():
     yv, yt = D.y[D.i_va], D.y[D.i_te]
     for shelter in (False, True):
         name = "with_shelter" if shelter else "without_shelter"
-        cfg = pickle.load(open(os.path.join(args.search, f"catboost_{name}.pkl"), "rb"))["best"]["cfg"]
-        print(f"\n===== {name}: CatBoost {cfg} =====", flush=True)
-        pv, pt, info, model = fit_catboost(D, shelter, cfg, return_model=True)
+        cfg = pickle.load(open(os.path.join(args.search, f"{args.family}_{name}.pkl"), "rb"))["best"]["cfg"]
+        print(f"\n===== {name}: {args.family} {cfg} =====", flush=True)
+        pv, pt, info, model = FIT[args.family](D, shelter, cfg, return_model=True)
         kind, briers = choose_calibration(pv, yv)
         cal = make_calibrator(kind, pv, yv)
         pt_cal = apply_cal(cal, pt)
@@ -120,15 +121,18 @@ def main():
         print("보정표(시험, 보정 후):")
         print(calibration_table(yt, pt_cal).to_string())
 
-        imp = pd.Series(model.get_feature_importance(), index=model.feature_names_)
-        embs = [c for c in imp.index if c.startswith("emb")]
+        imp = importance(model)
+        embs =[c for c in imp.index if c.startswith("emb")]
         photos = [c for c in imp.index if c.startswith("photo")]
         show = pd.concat([imp.drop(embs + photos), pd.Series({"emb(합계)": imp[embs].sum()}),
                           pd.Series({"photo(합계)": imp[photos].sum()} if photos else {})]).sort_values(ascending=False)
         print("변수 중요도:")
         print(show.round(2).to_string())
 
-        model.save_model(os.path.join(args.out, f"catboost_{name}.cbm"))
+        if args.family == "catboost":
+            model.save_model(os.path.join(args.out, f"catboost_{name}.cbm"))
+        else:
+            pickle.dump(model, open(os.path.join(args.out, f"lightgbm_{name}.pkl"), "wb"))
         pickle.dump({"calibrator": cal, "kind": kind}, open(os.path.join(args.out, f"calibrator_{name}.pkl"), "wb"))
         pd.DataFrame({"id": D.df["id"].values[D.i_te], "date": D.df["date"].values[D.i_te], "y": yt,
                       "p_raw": pt, "p_cal": pt_cal}).to_csv(os.path.join(args.out, f"pred_test_{name}.csv"),
@@ -137,7 +141,7 @@ def main():
 
     # 새 개체 예측에 필요한 전처리 도구 (모두 학습 구간에서 맞춘 것)
     cats = {c: list(pd.Index(D.df[c].iloc[D.i_tr].unique())) for c in D.cats(True)}
-    pickle.dump({"tfidf": D.tfidf, "txt_model": D.txt_model, "pca32": D.pca32, "categories": cats, "num": NUM,
+    pickle.dump({"family": args.family, "tfidf": D.tfidf, "txt_model": D.txt_model, "pca32": D.pca32, "categories": cats, "num": NUM,
                  "emb_model": "intfloat/multilingual-e5-base", "emb_prefix": "query: ", "max_date": args.max_date,
                  "photo_pca": photo_pca, "photo_model": "facebook/dinov2-small" if photo_pca is not None else None},
                 open(os.path.join(args.out, "preprocess.pkl"), "wb"))
